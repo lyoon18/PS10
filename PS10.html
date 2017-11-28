@@ -9,7 +9,7 @@
 <meta name="generator" content="pandoc" />
 
 
-<meta name="author" content="WRITE YOUR NAME(S) HERE" />
+<meta name="author" content="Leonard Yoon" />
 
 <meta name="date" content="2017-11-28" />
 
@@ -216,7 +216,7 @@ div.tocify {
 
 
 <h1 class="title toc-ignore">STAT/MATH 495: Problem Set 10</h1>
-<h4 class="author"><em>WRITE YOUR NAME(S) HERE</em></h4>
+<h4 class="author"><em>Leonard Yoon</em></h4>
 <h4 class="date"><em>2017-11-28</em></h4>
 
 </div>
@@ -224,37 +224,68 @@ div.tocify {
 
 <div id="collaboration" class="section level1">
 <h1>Collaboration</h1>
-<p>Please indicate who you collaborated with on this assignment:</p>
+<p>Please indicate who you collaborated with on this assignment: ANDREW (Big help!)</p>
 </div>
 <div id="setup" class="section level1">
 <h1>Setup</h1>
-<pre class="r"><code>library(tidyverse)
-library(broom)
-library(glmnet)
-
-train &lt;- read_csv(&quot;data/train.csv&quot;)
-test &lt;- read_csv(&quot;data/test.csv&quot;)
-sample_submission &lt;- read_csv(&quot;data/sample_submission.csv&quot;)
-
-# Only use 150 observations to train model!
-set.seed(76)
-train &lt;- train %&gt;% 
-  mutate(log_price_doc = log(price_doc)) %&gt;% 
-  sample_n(150)
-
-# Need &quot;dummy&quot; outcome variable to make model.matrix() code below work
-test &lt;- test %&gt;% 
-  mutate(log_price_doc=1) 
-
-# Model formula
-model_formula &lt;- as.formula(&quot;log_price_doc ~ full_sq + area_m + raion_popul + green_zone_part + indust_part + children_preschool + preschool_education_centers_raion + children_school + school_education_centers_raion + school_education_centers_top_20_raion + healthcare_centers_raion + university_top_20_raion + sport_objects_raion + additional_education_raion + culture_objects_top_25 + culture_objects_top_25_raion + shopping_centers_raion + office_raion + thermal_power_plant_raion + incineration_raion + oil_chemistry_raion + radiation_raion + railroad_terminal_raion + big_market_raion + nuclear_reactor_raion + detention_facility_raion + full_all + male_f + female_f + young_all + young_male + young_female + work_all + work_male + work_female + ekder_all + ekder_male + ekder_female + ID_metro + metro_min_avto + metro_km_avto + kindergarten_km + school_km + park_km + green_zone_km + industrial_km + water_treatment_km + cemetery_km + incineration_km + railroad_station_avto_km + railroad_station_avto_min + ID_railroad_station_avto + public_transport_station_km + public_transport_station_min_walk + water_km + water_1line + mkad_km + ttk_km + sadovoe_km + bulvar_ring_km + kremlin_km + big_road1_km + ID_big_road1 + big_road1_1line + big_road2_km + ID_big_road2 + railroad_km + railroad_1line + zd_vokzaly_avto_km + ID_railroad_terminal + bus_terminal_avto_km + ID_bus_terminal + oil_chemistry_km + nuclear_reactor_km + radiation_km + power_transmission_line_km + thermal_power_plant_km + ts_km + big_market_km + market_shop_km + fitness_km + swim_pool_km + ice_rink_km + stadium_km + basketball_km + hospice_morgue_km + detention_facility_km + public_healthcare_km + university_km + workplaces_km + shopping_centers_km + office_km + additional_education_km + preschool_km + big_church_km + church_synagogue_km + mosque_km + theater_km + museum_km + exhibition_km + catering_km + green_part_500 + prom_part_500 + office_count_500 + office_sqm_500 + trc_count_500 + trc_sqm_500&quot;) 
-
-# Define predictor matrices
-predictor_matrix_train &lt;- model.matrix(model_formula, data = train)[, -1]
-predictor_matrix_test &lt;- model.matrix(model_formula, data = test)[, -1]</code></pre>
 </div>
 <div id="do-work-and-create-submission-files" class="section level1">
 <h1>Do work and create submission files:</h1>
+<div id="lasso-crossvalidated" class="section level2">
+<h2>LASSO crossvalidated</h2>
+<pre class="r"><code># Crossvalidated LASSO for training data
+LASSO_CV_train &lt;- cv.glmnet(x=predictor_matrix_train, y=train$log_price_doc, alpha = 1, lambda = lambda_inputs)
+
+# Optimal lambdas for training data
+lambda_optimal_train &lt;- LASSO_CV_train$lambda.min # Value of lambda corresponding to the minimal MSE
+lambda_optimal_one_SE_train &lt;- LASSO_CV_train$lambda.1se # Value of lambda corresponding to the simplest
+# model within one standard error of minimal MSE</code></pre>
+<p>Let’s use the value of <span class="math inline">\(\lambda\)</span> corresponding to the simplest model within one standard error of minimal MSE for our predictions.</p>
+<pre class="r"><code># predict log_price_doc for training data
+y_hat_train &lt;- predict(LASSO_CV_train, newx=predictor_matrix_train, s=lambda_optimal_one_SE_train) %&gt;% 
+  as.vector()
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_train &lt;- exp(y_hat_train)
+
+# root mean squared log error
+train_LASSO_score &lt;- RMSLE(y_hat_train, train$price_doc)</code></pre>
+<pre class="r"><code># predict log_price_doc for test data
+y_hat_test &lt;- predict(LASSO_CV_train, newx=predictor_matrix_test, s=lambda_optimal_one_SE_train) %&gt;% 
+  as.vector()
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_test &lt;- exp(y_hat_test)
+
+# create submission.csv
+submission &lt;- data.frame(id = test$id, 
+                         price_doc = y_hat_test)
+write.csv(submission, &quot;submission.csv&quot;, row.names = FALSE)</code></pre>
+</div>
+<div id="lm" class="section level2">
+<h2>lm</h2>
+<pre class="r"><code># lm for training data
+linear_model_train &lt;- lm(model_formula, data=train)
+
+# predict log_price_doc
+y_hat_train_lm &lt;- predict(linear_model_train)
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_train_lm &lt;- exp(y_hat_train_lm)
+train_lm_score &lt;- RMSLE(y_hat_train_lm, train$price_doc)</code></pre>
+<pre class="r"><code># lm for test data
+linear_model_test &lt;- lm(model_formula, data=test)
+
+# predict log_price_doc
+y_hat_test_lm &lt;- predict(linear_model_test)
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_test_lm &lt;- exp(y_hat_test_lm)</code></pre>
+<pre class="r"><code># create submission_lm.csv
+submission_lm &lt;- data.frame(id = test$id, 
+                         price_doc = y_hat_test_lm)
+write.csv(submission_lm, &quot;submission_lm.csv&quot;, row.names = FALSE)</code></pre>
+</div>
 </div>
 <div id="scoreboard" class="section level1">
 <h1>Scoreboard</h1>
@@ -270,16 +301,17 @@ predictor_matrix_test &lt;- model.matrix(model_formula, data = test)[, -1]</code
 <tbody>
 <tr class="odd">
 <td>lm</td>
-<td></td>
-<td></td>
+<td>0.2534704</td>
+<td>14.4037</td>
 </tr>
 <tr class="even">
 <td>LASSO crossvalidated</td>
-<td></td>
-<td></td>
+<td>0.5416205</td>
+<td>.42577</td>
 </tr>
 </tbody>
 </table>
+<p>LASSO crossvalidation works! And we never want to overfit to training data. Gotta fit to test data to determine how good is our model.</p>
 </div>
 
 

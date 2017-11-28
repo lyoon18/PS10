@@ -1,35 +1,37 @@
 ---
-title: "STAT/MATH 495: Problem Set 10"
-author: "WRITE YOUR NAME(S) HERE"
-date: "2017-11-28"
+title: 'STAT/MATH 495: Problem Set 10'
+author: "Leonard Yoon"
+date: '2017-11-28'
 output:
   html_document:
-    toc: true
-    toc_float: true
-    toc_depth: 2
-    collapsed: false
-    smooth_scroll: false
+    collapsed: no
     df_print: kable
+    smooth_scroll: no
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4.5, message=FALSE, warning = FALSE)
 ```
 
-
-
 # Collaboration
 
-Please indicate who you collaborated with on this assignment: 
-
-
+Please indicate who you collaborated with on this assignment: ANDREW (Big help!)
 
 # Setup
 
-```{r}
+```{r, include = FALSE}
 library(tidyverse)
 library(broom)
 library(glmnet)
+library(MLmetrics)
 
 train <- read_csv("data/train.csv")
 test <- read_csv("data/test.csv")
@@ -51,18 +53,85 @@ model_formula <- as.formula("log_price_doc ~ full_sq + area_m + raion_popul + gr
 # Define predictor matrices
 predictor_matrix_train <- model.matrix(model_formula, data = train)[, -1]
 predictor_matrix_test <- model.matrix(model_formula, data = test)[, -1]
-```
 
+# Define values of tuning/complexity parameter lambda. Note:
+# -They increase at an exponential rate in powers of 10
+lambda_inputs <- 10^seq(-2, 10, length = 100)
+```
 
 # Do work and create submission files:
 
-```{r}
+## LASSO crossvalidated
 
+```{r}
+# Crossvalidated LASSO for training data
+LASSO_CV_train <- cv.glmnet(x=predictor_matrix_train, y=train$log_price_doc, alpha = 1, lambda = lambda_inputs)
+
+# Optimal lambdas for training data
+lambda_optimal_train <- LASSO_CV_train$lambda.min # Value of lambda corresponding to the minimal MSE
+lambda_optimal_one_SE_train <- LASSO_CV_train$lambda.1se # Value of lambda corresponding to the simplest
+# model within one standard error of minimal MSE
 ```
 
+Let's use the value of $\lambda$ corresponding to the simplest model within one standard error of minimal MSE for our predictions.
 
+```{r}
+# predict log_price_doc for training data
+y_hat_train <- predict(LASSO_CV_train, newx=predictor_matrix_train, s=lambda_optimal_one_SE_train) %>% 
+  as.vector()
 
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_train <- exp(y_hat_train)
 
+# root mean squared log error
+train_LASSO_score <- RMSLE(y_hat_train, train$price_doc)
+```
+
+```{r}
+# predict log_price_doc for test data
+y_hat_test <- predict(LASSO_CV_train, newx=predictor_matrix_test, s=lambda_optimal_one_SE_train) %>% 
+  as.vector()
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_test <- exp(y_hat_test)
+
+# create submission.csv
+submission <- data.frame(id = test$id, 
+                         price_doc = y_hat_test)
+write.csv(submission, "submission.csv", row.names = FALSE)
+```
+
+## lm
+
+```{r}
+# lm for training data
+linear_model_train <- lm(model_formula, data=train)
+
+# predict log_price_doc
+y_hat_train_lm <- predict(linear_model_train)
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_train_lm <- exp(y_hat_train_lm)
+train_lm_score <- RMSLE(y_hat_train_lm, train$price_doc)
+```
+
+```{r}
+# lm for test data
+linear_model_test <- lm(model_formula, data=test)
+
+# predict log_price_doc
+y_hat_test_lm <- predict(linear_model_test)
+
+# revert units of predicted log_price_doc to units of price_doc
+y_hat_test_lm <- exp(y_hat_test_lm)
+```
+
+```{r}
+# create submission_lm.csv
+submission_lm <- data.frame(id = test$id, 
+                         price_doc = y_hat_test_lm)
+write.csv(submission_lm, "submission_lm.csv", row.names = FALSE)
+```
 
 # Scoreboard
 
@@ -72,5 +141,7 @@ in these cells:
 
 Method                | Training Score  | Kaggle Score
 --------------------- | -------------   | -------------
-lm                    |                 |  
-LASSO crossvalidated  |                 |  
+lm                    |  `r train_lm_score`               |  14.4037
+LASSO crossvalidated  |  `r train_LASSO_score`               |    .42577
+
+LASSO crossvalidation works! And we never want to overfit to training data. Gotta fit to test data to determine how good is our model.
