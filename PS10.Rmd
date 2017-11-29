@@ -116,11 +116,8 @@ train_lm_score <- RMSLE(y_hat_train_lm, train$price_doc)
 ```
 
 ```{r}
-# lm for test data
-linear_model_test <- lm(model_formula, data=test)
-
 # predict log_price_doc
-y_hat_test_lm <- predict(linear_model_test)
+y_hat_test_lm <- predict(linear_model_train, newdata=test)
 
 # revert units of predicted log_price_doc to units of price_doc
 y_hat_test_lm <- exp(y_hat_test_lm)
@@ -141,7 +138,7 @@ in these cells:
 
 Method                | Training Score  | Kaggle Score
 --------------------- | -------------   | -------------
-lm                    |  `r train_lm_score`               |  14.4037
-LASSO crossvalidated  |  `r train_LASSO_score`               |    .42577
+lm                    |  `r train_lm_score`               |  2.63413
+LASSO crossvalidated  |  `r train_LASSO_score`               |    .45162
 
 LASSO crossvalidation works! And we never want to overfit to training data. Gotta fit to test data to determine how good is our model.

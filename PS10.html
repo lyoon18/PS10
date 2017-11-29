@@ -273,11 +273,8 @@ y_hat_train_lm &lt;- predict(linear_model_train)
 # revert units of predicted log_price_doc to units of price_doc
 y_hat_train_lm &lt;- exp(y_hat_train_lm)
 train_lm_score &lt;- RMSLE(y_hat_train_lm, train$price_doc)</code></pre>
-<pre class="r"><code># lm for test data
-linear_model_test &lt;- lm(model_formula, data=test)
-
-# predict log_price_doc
-y_hat_test_lm &lt;- predict(linear_model_test)
+<pre class="r"><code># predict log_price_doc
+y_hat_test_lm &lt;- predict(linear_model_train, newdata=test)
 
 # revert units of predicted log_price_doc to units of price_doc
 y_hat_test_lm &lt;- exp(y_hat_test_lm)</code></pre>
@@ -302,12 +299,12 @@ write.csv(submission_lm, &quot;submission_lm.csv&quot;, row.names = FALSE)</code
 <tr class="odd">
 <td>lm</td>
 <td>0.2534704</td>
-<td>14.4037</td>
+<td>2.63413</td>
 </tr>
 <tr class="even">
 <td>LASSO crossvalidated</td>
 <td>0.5416205</td>
-<td>.42577</td>
+<td>.45162</td>
 </tr>
 </tbody>
 </table>
